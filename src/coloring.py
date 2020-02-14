@@ -20,7 +20,7 @@ def random_coloring(G,p0=None,p1=None,color_name='color'):
         k0 = np.random.choice(range(len(p0)), size=(len(G.nodes),), p=p0)
         for (v,k0v) in zip(G.nodes, k0):
             G.nodes[v][color_name] = k0v
-   if p1 is not None:
+    if p1 is not None:
         p1 = list(p1) + [1 - sum(p1)]
         k1 = np.random.choice(range(len(p1)),size=(len(G.edges),),p=p1)
         for (e,k1e) in zip(G.edges,k1):
