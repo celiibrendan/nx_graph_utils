@@ -580,20 +580,20 @@ def graph_network(G,plot_type="2D",layout="non_random",locations=None,
     - if multiply graphs then verify that plot type is all the same if it is a list
     """
     #make a copy of the graph so not alter attributes
-    G = G.copy(as_view=False)
+    
     
     
     multiple_graph_flag = False
     if type(G) == list:
         multiple_graph_flag = True
-        graph_list = G
+        graph_list = [k.copy(as_view=False) for k in G]
     else: 
         if (type(G) != type(nx.Graph()) 
                 and type(G) != type(nx.DiGraph())
                 and type(G) != type(nx.MultiGraph())
                 and type(G) != type(nx.MultiDiGraph())):
             raise Exception("The graph is not a network ")
-        graph_list = [G]
+        graph_list = [G.copy(as_view=False)]
             
     """         # ------------------------- WORKING ON LOCATION ---------------------------------- #
     3) Identify the locations vector specified: (identify as list or scalar --> turn to list)
@@ -857,7 +857,7 @@ def graph_network(G,plot_type="2D",layout="non_random",locations=None,
                     current_directions = directions[color_indices]
                     ipv.pylab.quiver(current_midpoints[:,0],current_midpoints[:,1],current_midpoints[:,2],
                     current_directions[:,0],current_directions[:,1],current_directions[:,2],
-                    size=10,
+                    size=2,
                     size_selected=20,
                     color = n)
             
@@ -915,7 +915,7 @@ def graph_network(G,plot_type="2D",layout="non_random",locations=None,
             
             #len(nx.get_node_attributes(current_graph,"color")) <= 0
             
-            print("current_color_edge = " + str(current_color_edge))
+            #print("current_color_edge = " + str(current_color_edge))
             location_check = set(current_locations.keys()) != set(current_graph.nodes)
             if location_check or layout=="random": #then use the random locations
                 if location_check and layout!="random":
