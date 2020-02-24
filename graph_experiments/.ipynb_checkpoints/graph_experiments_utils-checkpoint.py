@@ -2,6 +2,8 @@ import networkx as nx
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+import random
+    
 
 
 #-------------- Functions available for creating graphs -----------------------#
@@ -9,7 +11,6 @@ def erdos_renyi_random_location(n,p):
     """
     Erdos Renyi graph that has random locations generated
     """
-    import random
     
     network = nx.fast_gnp_random_graph(n,p)
     
@@ -21,6 +22,31 @@ def erdos_renyi_random_location(n,p):
     nx.set_node_attributes(network, dict([(i,node_locations[i,:]) 
                               for i,node in enumerate(network.nodes)]), 'locations')
     
+    return network
+
+def watts_strogatz_graph_smallworld_random_location(n,p,k):
+    network = nx.generators.random_graphs.watts_strogatz_graph(n,k,p)
+    
+    #setting random node locations
+    node_locations =np.array([[random.uniform(0, 1),
+                   random.uniform(0, 1),
+                   random.uniform(0, 1)] for i in range(0,n)])
+
+    nx.set_node_attributes(network, dict([(i,node_locations[i,:]) 
+                              for i,node in enumerate(network.nodes)]), 'locations')
+    
+    return network
+   
+def random_tree_random_location(n):
+    network = nx.generators.trees.random_tree(n)
+    
+    #setting random node locations
+    node_locations =np.array([[random.uniform(0, 1),
+                   random.uniform(0, 1),
+                   random.uniform(0, 1)] for i in range(0,n)])
+
+    nx.set_node_attributes(network, dict([(i,node_locations[i,:]) 
+                              for i,node in enumerate(network.nodes)]), 'locations')
     return network
 
 #-------------- Functions that are available for graph stats ------------------ #
@@ -328,6 +354,7 @@ def run_graph_experiment(graph_function,
     data_structure = dict()
 
     for current_parameter_combination in parameter_combinations:
+        #print("current_parameter_combination = " + str(current_parameter_combination))
         #create dictionary with arguments
         graph_args = dict([(k,v) for k,v in zip(parameter_names,current_parameter_combination)])
         loop_start = time.time()
@@ -355,25 +382,28 @@ def run_graph_experiment(graph_function,
                     graph_name += "_" + str(at)
 
                 data_structure[graph_name] = dict()
+                data_structure[graph_name]["n_edges"] = len(G.edges)
+                data_structure[graph_name]["n_nodes"] = len(G.nodes)
                 data_structure[graph_name]["iterations"] = dict()
                 data_structure[graph_name]["n_iterations"] = n_iterations
                 data_structure[graph_name]["attribute_list"] = attr
                 data_structure[graph_name]["graph_type"] = graph_type
                 data_structure[graph_name]["example_graph"] = G
-                data_structure[graph_name]["n_nodes"] = len(G.nodes)
-                data_structure[graph_name]["n_edges"] = len(G.edges)
                 data_structure[graph_name]["parameters"] = dict()
                 for k,v in graph_args.items():
                     data_structure[graph_name]["parameters"][k] = v
 
-
-            stats_dict = graph_statistics_vp2(G,functions_list,
+            stats_dict = dict()
+            stats_dict["n_nodes"] = len(G.nodes)
+            stats_dict["n_edges"] = len(G.edges)
+            
+            stats_dict_update = graph_statistics_vp2(G,functions_list,
                                             my_args = func_args,
                                              undirected_flag = False,
                                              time_print_flag=False,
                                              output_print_flag = False)
 
-            stats_dict["n_edges"] = len(G.edges)
+            stats_dict.update(stats_dict_update)
             data_structure[graph_name]["iterations"][it] = stats_dict
 
             if iteration_print_flag:
@@ -469,6 +499,7 @@ def table_comparison_statistics(data_structure,with_parameters=True,
         
     #print(statistics_list)
     pd_data = dict(graphs=graph_lists)
+    
     for stat in statistics_list:
         pd_data[stat] = []
         for g in graph_lists:
@@ -669,7 +700,8 @@ def plot_df_values(df,index_restriction,
                    plot_type="scatter",
                    title="",
                   value_restriction="",
-                  return_plotted_df_table=True):
+                  return_plotted_df_table=True,
+                  return_fig_ax=False):
     """
     Will plot values from the data table as specified
     
@@ -782,9 +814,17 @@ def plot_df_values(df,index_restriction,
     for current_parameter_combination in parameter_combinations:
         group_args = dict([(k,v) for k,v in zip(parameter_names,current_parameter_combination)])
         #get the restricted datatable:
-        current_value_restriction = f"{parameter_names[0]} = {current_parameter_combination[0]}"
+        if type(parameter_names[0]) == str:
+            current_value_restriction = f"{parameter_names[0]} = '{current_parameter_combination[0]}'"
+        else:
+            current_value_restriction = f"{parameter_names[0]} = {current_parameter_combination[0]}"
+           
         for i in range(1,len(parameter_names)):
-            current_value_restriction += f" AND {parameter_names[i]} = {current_parameter_combination[i]}"
+            if type(parameter_names[0]) == str:
+                current_value_restriction += f" AND {parameter_names[i]} = '{current_parameter_combination[i]}'"
+            else:
+                current_value_restriction += f" AND {parameter_names[i]} = {current_parameter_combination[i]}"
+        
         
         #print("current_value_restriction = " + str(current_value_restriction))
         new_table = restrict_pandas(returned_df,value_restriction=current_value_restriction)
@@ -826,13 +866,35 @@ def plot_df_values(df,index_restriction,
     ax.set_ylabel(y_column)
     if z_column != "":
         ax.set_zlabel(z_column)
+        
+        
     ax.legend()
+    ax.get_legend().remove()
+    leg = plt.legend( loc = 'upper right')
 
-    plt.show()
-    
-    if return_plotted_df_table:
-        #return returned_df
+    # Get the bounding box of the original legend
+    bb = leg.get_bbox_to_anchor().inverse_transformed(ax.transAxes)
+
+    # Change to location of the legend. 
+    xOffset = 1.2
+    bb.x0 += xOffset
+    bb.x1 += xOffset
+    leg.set_bbox_to_anchor(bb, transform = ax.transAxes)    
+        
+
+    if return_fig_ax and return_plotted_df_table==False:
+        return fig,ax
+    elif return_fig_ax and return_plotted_df_table:
+        return pd.concat(frames),(fig,ax)
+    elif return_fig_ax == False and return_plotted_df_table:
+        plt.show()
         return pd.concat(frames)
+    else:
+        plt.show()
+    
+#     if return_plotted_df_table:
+#         #return returned_df
+#         return pd.concat(frames)
 
 
 
