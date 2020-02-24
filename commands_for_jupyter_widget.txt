@@ -2,3 +2,5 @@ apt install nodejs npm
 jupyter labextension install @jupyter-widgets/jupyterlab-manager
 jupyter labextension install ipyvolume
 ** Then reload your window **
+
+pip3 install pandasql
