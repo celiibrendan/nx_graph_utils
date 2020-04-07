@@ -4,17 +4,17 @@ A pure-python implementation of exponential random graph models (ERGMs). Adapted
 Throughout this package, graphs are represented by their adjacency matrices, which are simply numpy arrays.
 
 Classes:
-    ergm
+    ergmpy
 """
 import numpy as np
 
-from ergm import util
+from ergmpy import util
 
 
 class ergm:
     def __init__(self, stats, coeffs=None, directed=True):
         """
-        Construct an ergm with a given family of sufficient statistics.
+        Construct an ergmpy with a given family of sufficient statistics.
 
         Args:
 
@@ -92,7 +92,7 @@ class ergm:
             S = [util.index_to_edge(idx, n_nodes, directed) for idx in
                  idx_sequence[(bk * block_size):((bk + 1) * block_size)]]
             # S is the list of edges (i.e. ordered pairs)
-            p_e = np.zeros((1, 2 ** block_size))
+            p_e = np.zeros(2 ** block_size)
             for i in range(2 ** block_size):  # looping over all possible configurations of those edges
                 li = util.binlist(i)  # this is the specific configuration, should be same length as S
                 # for idx, edge in enumerate(li):
@@ -101,6 +101,7 @@ class ergm:
                 for S_i, A_i in zip(S, li):
                     A[S_i[0], S_i[1]] = A_i
                 p_e[i] = np.exp(np.dot(util.pam(self.stats, A), self.coeffs))  # weight of this configuration
+            p_e = [p / sum(p_e) for p in p_e]
             config = np.random.choice(range(2 ** block_size), p=p_e)
             li = util.binlist(config)
             # for idx, edge in enumerate(li):

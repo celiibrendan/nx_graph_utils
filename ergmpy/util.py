@@ -1,5 +1,5 @@
 """
-Utility functions for the ergm package
+Utility functions for the ergmpy package
 """
 import numpy as np
 
