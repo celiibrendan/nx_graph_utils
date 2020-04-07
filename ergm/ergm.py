@@ -43,4 +43,71 @@ class ergm:
         """
         return np.exp(np.sum(util.pam(self.stats, A)))
 
+    def sample_binary(self, n_nodes, n_samples=1, A_0=None, burn_in=None, block_size=1, n_steps=None, order="columns",
+                      directed=False, dtype=int):
+        """
+        Return samples from this distribution using Gibbs sampling. Assumes distribution is over simple, "undecorated"
+        graphs (i.e. no  edge weights, no node properties, no self-loops).
 
+        Args:
+            n_nodes : the number of nodes in the graph
+
+            n_samples : number of samples to return. Default 1.
+
+            A_0 : starting graph. Default value of None results in empty graph (np.zeros) being used.
+
+            burn_in : number of initial, discard steps to take before returning samples. Default is n_nodes ** 2
+
+            block_size : the number of edges to try flipping at once. Default is 1.
+
+            n_steps : the number of markov chain steps to take between samples. Default is n_nodes ** 2
+
+            directed : the
+
+            dtype : the data type of the adjacency matrix. Default is int, for binary adjacency matrices.
+
+            order : The order the entries in the adjacency matrix are filled in. Default "columns"
+
+        Returns:
+            A 3d numpy array with shape (n_nodes, n_nodes, n_samples).
+        """
+        if A_0 is None:
+            A = np.zeros((n_nodes, n_nodes))
+        else:
+            A = A_0  # current adjacency matrix, will be updated in place.
+        if burn_in is None:
+            burn_in = n_nodes ** 2
+        if n_steps is None:
+            n_steps = n_nodes ** 2
+
+        samples = np.zeros((n_nodes, n_nodes, n_samples), dtype=dtype)
+
+        total_updates = (burn_in + n_steps * n_samples) * block_size
+        idx_sequence = np.random.choice(range(n_nodes * (n_nodes - 1) // (1 + (not self.directed))),
+                                        size=(total_updates,))
+        # edges = map(lambda k: util.index_to_edge(k, n_nodes, self.directed, order), idx_sequence)
+
+        # sample_steps = np.arange(burn_in * block_size, total_updates, n_steps * block_size) + n_steps * block_size
+        for bk in range(burn_in + n_steps * n_samples):
+            S = [util.index_to_edge(idx, n_nodes, directed) for idx in
+                 idx_sequence[(bk * block_size):((bk + 1) * block_size)]]
+            # S is the list of edges (i.e. ordered pairs)
+            p_e = np.zeros((1, 2 ** block_size))
+            for i in range(2 ** block_size):  # looping over all possible configurations of those edges
+                li = util.binlist(i)  # this is the specific configuration, should be same length as S
+                # for idx, edge in enumerate(li):
+                #     S_i = util.index_to_edge(S[idx], n_nodes, directed=directed)
+                #     # A[S[idx][0], S[idx][1]] = edge
+                for S_i, A_i in zip(S, li):
+                    A[S_i[0], S_i[1]] = A_i
+                p_e[i] = np.exp(np.dot(util.pam(self.stats, A), self.coeffs))  # weight of this configuration
+            config = np.random.choice(range(2 ** block_size), p=p_e)
+            li = util.binlist(config)
+            # for idx, edge in enumerate(li):
+            #     A[S[idx][0], S[idx][1]] = edge
+            for S_i, A_i in zip(S, li):
+                A[S_i[0], S_i[1]] = A_i
+            if bk >= burn_in and (bk - burn_in) % n_steps == 0:
+                samples[:, :, (bk - burn_in) // n_steps] = A[:, :]
+
+        return samples
