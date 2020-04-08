@@ -12,7 +12,7 @@ from ergmpy import util
 
 
 class ergm:
-    def __init__(self, stats, coeffs=None, directed=True):
+    def __init__(self, stats, coeffs=None, directed=False):
         """
         Construct an ergmpy with a given family of sufficient statistics.
 
@@ -23,7 +23,7 @@ class ergm:
 
             coefs : a list of the natural parameters which determine the distribution. Default is all zeros.
 
-            directed : whether the graphs from this family are directed or not. Default true.
+            directed : whether the graphs from this family are directed or not. Default False.
         """
         self.stats = stats
         if coeffs is None:
@@ -44,7 +44,7 @@ class ergm:
         return np.exp(np.sum(util.pam(self.stats, A)))
 
     def sample_binary(self, n_nodes, n_samples=1, A_0=None, burn_in=None, block_size=1, n_steps=None, order="columns",
-                      directed=False, dtype=int):
+                      dtype=int):
         """
         Return samples from this distribution using Gibbs sampling. Assumes distribution is over simple, "undecorated"
         graphs (i.e. no  edge weights, no node properties, no self-loops).
@@ -62,8 +62,6 @@ class ergm:
 
             n_steps : the number of markov chain steps to take between samples. Default is n_nodes ** 2
 
-            directed : the
-
             dtype : the data type of the adjacency matrix. Default is int, for binary adjacency matrices.
 
             order : The order the entries in the adjacency matrix are filled in. Default "columns"
@@ -76,9 +74,9 @@ class ergm:
         else:
             A = A_0  # current adjacency matrix, will be updated in place.
         if burn_in is None:
-            burn_in = n_nodes ** 2
+            burn_in = 10 * n_nodes
         if n_steps is None:
-            n_steps = n_nodes ** 2
+            n_steps = 10 * n_nodes
 
         samples = np.zeros((n_nodes, n_nodes, n_samples), dtype=dtype)
 
@@ -89,7 +87,7 @@ class ergm:
 
         # sample_steps = np.arange(burn_in * block_size, total_updates, n_steps * block_size) + n_steps * block_size
         for bk in range(burn_in + n_steps * n_samples):
-            S = [util.index_to_edge(idx, n_nodes, directed) for idx in
+            S = [util.index_to_edge(idx, n_nodes, self.directed) for idx in
                  idx_sequence[(bk * block_size):((bk + 1) * block_size)]]
             # S is the list of edges (i.e. ordered pairs)
             p_e = np.zeros(2 ** block_size)
