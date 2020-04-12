@@ -26,6 +26,19 @@ def binlist(n):
     return [int(x) for x in bin(n)[2:]]
 
 
+def binary_digits(n, d):  # numpy-optimized
+    """Returns an n x d array of the binary digits of each entry of array n
+
+    Parameters:
+        n : array_like
+            Integer values to be represented as binary digits
+
+        d : the number of digits; zero padding and/or truncation if necessary
+
+    Returns:
+        digits : an n x d binary array; each row is the digits of the corresponding entry of n. Least significant bit has index 0.
+    """
+    return ((n[:, None] & (1 << np.arange(d))) > 0).astype(int)
 # def edge_index(e0, e1, n, directed=False, order="columns"):
 #     """Returns the index of the edge `(e0,e1)` in an `n`-node graph."""
 #     if order == "columns":
@@ -34,7 +47,7 @@ def binlist(n):
 #         return e1 * n + e0 + (e0 > e1)
 
 
-def index_to_edge(idx, n, directed=True, order="columns"):
+def index_to_edge_old(idx, n, directed=True, order="columns"):
     """Returns the ordered pair `(e0,e1)` for the edge which has linear index `idx`. This is essentially the linear
     index of an entry in a matrix, except shifts are included so the diagonal entries don't get indexed.
 
@@ -68,6 +81,33 @@ def index_to_edge(idx, n, directed=True, order="columns"):
             return (e0, e1)
         else:
             return (e1, e0)
+
+
+def index_to_edge(idx, n, directed=True, order="C"):
+    """Converts linear indices to edge tuples. Behaves like numpy.unravel_index, with some slight modifications:
+    1. It does not return tuples of the form (i,i) and 2. If `directed=False`, the tuples are always in increasing order.
+
+    Parameters:
+        idx : array_like
+            An integer array whose elements are indices into the edges of the graph; each entry must be nonnegative and less than `n * (n-1).
+
+        n : the number of vertices in the graph
+
+        directed : whether the graph is directed. Default True.
+
+        order : 'C' for C-style (i.e. rows filled first) or 'F' for Fortran-style (i.e. columns filled first) indexing.
+
+    Returns:
+        edges : a 2-tuple of arrays, each the same size as `idx`.
+    """
+    I, J = np.unravel_index(idx, (n-1,n), 'F')
+    I[I >= J] += 1
+    if directed:
+        I, J = np.min(np.vstack((I, J)), axis=0), np.max(np.vstack((I, J)), axis=0)
+    if order == "C":
+        return I, J
+    else:
+        return J, I
 
 
 def triangular_root(x):

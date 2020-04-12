@@ -41,10 +41,10 @@ class ergm:
 
             A : A 2d numpy array representing an adjacency matrix.
         """
-        return np.exp(np.sum(util.pam(self.stats, A)))
+        return np.exp(np.dot(util.pam(self.stats, A), self.coeffs))
 
     def sample_binary(self, n_nodes, n_samples=1, A_0=None, burn_in=None, block_size=1, n_steps=None, order="columns",
-                      dtype=int):
+                      dtype=int, verbose=0):
         """
         Return samples from this distribution using Gibbs sampling. Assumes distribution is over simple, "undecorated"
         graphs (i.e. no  edge weights, no node properties, no self-loops).
@@ -66,6 +66,9 @@ class ergm:
 
             order : The order the entries in the adjacency matrix are filled in. Default "columns"
 
+            verbose : how much output to print. Useful for debugging purposes. Valid values are 0 (default,
+                no output), 1 (a little output), 2 (a little more
+
         Returns:
             A 3d numpy array with shape (n_nodes, n_nodes, n_samples).
         """
@@ -77,35 +80,51 @@ class ergm:
             burn_in = 10 * n_nodes
         if n_steps is None:
             n_steps = 10 * n_nodes
+        if verbose > 0:
+            if self.directed:
+                type_str = "directed"
+            else:
+                type_str = "undirected"
+            print("Sampling an {} node {} graph using Gibbs sampler".format(n_nodes, type_str))
+            print("  burn-in:            {}".format(burn_in))
+            print("  inter-sample steps: {}".format(n_steps))
+            print("  block size:         {}".format(block_size))
 
-        samples = np.zeros((n_nodes, n_nodes, n_samples), dtype=dtype)
+        samples = np.empty((n_nodes, n_nodes, n_samples), dtype=dtype)
 
         total_updates = (burn_in + n_steps * n_samples) * block_size
         idx_sequence = np.random.choice(range(n_nodes * (n_nodes - 1) // (1 + (not self.directed))),
                                         size=(total_updates,))
         # edges = map(lambda k: util.index_to_edge(k, n_nodes, self.directed, order), idx_sequence)
+        if verbose > 1:
+            print("First few edges to be sampled: {}".format(idx_sequence[:10]))
 
         # sample_steps = np.arange(burn_in * block_size, total_updates, n_steps * block_size) + n_steps * block_size
         for bk in range(burn_in + n_steps * n_samples):
-            S = [util.index_to_edge(idx, n_nodes, self.directed) for idx in
-                 idx_sequence[(bk * block_size):((bk + 1) * block_size)]]
-            # S is the list of edges (i.e. ordered pairs)
-            p_e = np.zeros(2 ** block_size)
-            for i in range(2 ** block_size):  # looping over all possible configurations of those edges
-                li = util.binlist(i)  # this is the specific configuration, should be same length as S
-                # for idx, edge in enumerate(li):
-                #     S_i = util.index_to_edge(S[idx], n_nodes, directed=directed)
-                #     # A[S[idx][0], S[idx][1]] = edge
-                for S_i, A_i in zip(S, li):
-                    A[S_i[0], S_i[1]] = A_i
-                p_e[i] = np.exp(np.dot(util.pam(self.stats, A), self.coeffs))  # weight of this configuration
-            p_e = [p / sum(p_e) for p in p_e]
-            config = np.random.choice(range(2 ** block_size), p=p_e)
-            li = util.binlist(config)
-            # for idx, edge in enumerate(li):
-            #     A[S[idx][0], S[idx][1]] = edge
-            for S_i, A_i in zip(S, li):
-                A[S_i[0], S_i[1]] = A_i
+            S = util.index_to_edge(idx_sequence[(bk * block_size):((bk + 1) * block_size)], n_nodes,
+                                   directed=self.directed)
+            if verbose > 2 and (bk == 0 or (0 < bk and bk - burn_in) % n_steps == 0):
+                print("  Step {:3d}, sampling edges {}".format(bk, S))
+
+            p_config = np.empty(2 ** block_size)
+            # for i in range(2 ** block_size):  # looping over all possible configurations of those edges
+            #     li = util.binlist(i)  # this is the specific configuration, should be same length as S
+            #     for S_i, A_i in zip(S, li):
+            #         A[S_i[0], S_i[1]] = A_i
+            #     p_config[i] = np.exp(np.dot(util.pam(self.stats, A), self.coeffs))  # weight of this configuration
+            configs = util.binary_digits(np.arange(2 ** block_size), block_size)
+            for i in range(2 ** block_size):
+                A[tuple(S)] = configs[i, :]
+                p_config[i] = self.weight(A)
+                if verbose > 2 and (bk == 0 or (0 < bk and bk - burn_in) % n_steps == 0):
+                    print("    Configuration {} has  weight {}".format(configs[i, :], p_config[i]))
+
+            p_config = p_config / np.sum(p_config)
+            config = np.random.choice(range(2 ** block_size), p=p_config)
+            # li = util.binlist(config)
+            # for S_i, A_i in zip(S, li):
+            #     A[S_i[0], S_i[1]] = A_i
+            A[tuple(S)] = configs[config]
             if bk >= burn_in and (bk - burn_in) % n_steps == 0:
                 samples[:, :, (bk - burn_in) // n_steps] = A[:, :]
 
