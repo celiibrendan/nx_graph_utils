@@ -85,25 +85,36 @@ class ergm:
                 type_str = "directed"
             else:
                 type_str = "undirected"
-            print("Sampling an {} node {} graph using Gibbs sampler".format(n_nodes, type_str))
+            print("Sampling a {} node {} graph using Gibbs sampler".format(n_nodes, type_str))
             print("  burn-in:            {}".format(burn_in))
             print("  inter-sample steps: {}".format(n_steps))
             print("  block size:         {}".format(block_size))
 
+        n_edges = n_nodes * (n_nodes - 1) // (1 + (not self.directed))
+
         samples = np.empty((n_nodes, n_nodes, n_samples), dtype=dtype)
 
         total_updates = (burn_in + n_steps * n_samples) * block_size
-        idx_sequence = np.random.choice(range(n_nodes * (n_nodes - 1) // (1 + (not self.directed))),
-                                        size=(total_updates,))
-        # edges = map(lambda k: util.index_to_edge(k, n_nodes, self.directed, order), idx_sequence)
         if verbose > 1:
-            print("First few edges to be sampled: {}".format(idx_sequence[:10]))
+            print("Preparing sequence of edges to test")
+        # idx_sequence = np.random.choice(n_edges, size=(total_updates,))
+        # edge_indices = np.stack([np.random.choice(n_edges, block_size, replace=False) for k in range(burn_in + n_steps * n_samples)])
+        # # edges = map(lambda k: util.index_to_edge(k, n_nodes, self.directed, order), idx_sequence)
+        # if verbose > 1:
+        #     # print("First few edges to be sampled: {}".format(idx_sequence[:10]))
+        #     print("First few edges to be sampled: {}".format(edge_indices[:10]))
+        #     # if verbose > 2:
+        #     #     print("Histogram of choices:")
+        #     #     print(np.histogram(idx_sequence, bins=(n_nodes * (n_nodes-1))))
 
-        # sample_steps = np.arange(burn_in * block_size, total_updates, n_steps * block_size) + n_steps * block_size
         for bk in range(burn_in + n_steps * n_samples):
-            S = util.index_to_edge(idx_sequence[(bk * block_size):((bk + 1) * block_size)], n_nodes,
-                                   directed=self.directed)
-            if verbose > 2 and (bk == 0 or (0 < bk and bk - burn_in) % n_steps == 0):
+            # S = util.index_to_edge(idx_sequence[(bk * block_size):((bk + 1) * block_size)], n_nodes,
+            #                        directed=self.directed)
+            # S = util.index_to_edge(edge_indices[bk,:], n_nodes, directed=self.directed)
+
+            # seems like i'm running out of memory, possibly? When pre-allocating the whole sequence.
+            S = util.index_to_edge(np.random.choice(n_edges, block_size, replace=False), n_nodes, directed=self.directed)
+            if verbose > 2 and (bk == 0 or (0 < bk and (bk - burn_in) % n_steps == 0)):
                 print("  Step {:3d}, sampling edges {}".format(bk, S))
 
             p_config = np.empty(2 ** block_size)
@@ -115,7 +126,8 @@ class ergm:
             configs = util.binary_digits(np.arange(2 ** block_size), block_size)
             for i in range(2 ** block_size):
                 A[tuple(S)] = configs[i, :]
-                p_config[i] = self.weight(A)
+                # p_config[i] = self.weight(A)
+                p_config[i] = np.exp(np.dot(util.pam(self.stats, A), self.coeffs))  # weight of this configuration
                 if verbose > 2 and (bk == 0 or (0 < bk and bk - burn_in) % n_steps == 0):
                     print("    Configuration {} has  weight {}".format(configs[i, :], p_config[i]))
 
@@ -124,7 +136,7 @@ class ergm:
             # li = util.binlist(config)
             # for S_i, A_i in zip(S, li):
             #     A[S_i[0], S_i[1]] = A_i
-            A[tuple(S)] = configs[config]
+            A[tuple(S)] = configs[config, :]
             if bk >= burn_in and (bk - burn_in) % n_steps == 0:
                 samples[:, :, (bk - burn_in) // n_steps] = A[:, :]
 
