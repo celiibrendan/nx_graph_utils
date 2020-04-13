@@ -39,21 +39,15 @@ def binary_digits(n, d):  # numpy-optimized
         digits : an n x d binary array; each row is the digits of the corresponding entry of n. Least significant bit has index 0.
     """
     return ((n[:, None] & (1 << np.arange(d))) > 0).astype(int)
-# def edge_index(e0, e1, n, directed=False, order="columns"):
-#     """Returns the index of the edge `(e0,e1)` in an `n`-node graph."""
-#     if order == "columns":
-#         return e0 * n + e1 + (e1 > e0)
-#     else:
-#         return e1 * n + e0 + (e0 > e1)
 
 
-def index_to_edge_old(idx, n, directed=True, order="columns"):
+def index_to_edge_old(idx_arr, n, directed=True, order="columns"):
     """Returns the ordered pair `(e0,e1)` for the edge which has linear index `idx`. This is essentially the linear
     index of an entry in a matrix, except shifts are included so the diagonal entries don't get indexed.
 
     Args:
 
-        idx : an integer between 0 and n*(n-1) (inclusive) for directed graphs, or 0 and n*(n-1)/2 for undirected.
+        idx_arr : an integer between 0 and n*(n-1) (inclusive) for directed graphs, or 0 and n*(n-1)/2 for undirected.
 
         n : the number of nodes in the graph
 
@@ -68,15 +62,15 @@ def index_to_edge_old(idx, n, directed=True, order="columns"):
         A tuple of integers, the indices in the adjacency matrix.
     """
     if directed:
-        e1 = idx // (n - 1)
-        e0 = idx % (n - 1) + (idx % (n - 1) >= e1)
+        e1 = idx_arr // (n - 1)
+        e0 = idx_arr % (n - 1) + (idx_arr % (n - 1) >= e1)
         if order == "columns":
             return (e0, e1)
         else:
             return (e1, e0)
     else:
-        e1 = int(np.ceil(triangular_root(idx + 1)))
-        e0 = idx - (e1 - 1) * e1 // 2
+        e1 = int(np.ceil(triangular_root(idx_arr + 1)))
+        e0 = idx_arr - (e1 - 1) * e1 // 2
         if order == "columns":
             return (e0, e1)
         else:
@@ -98,16 +92,26 @@ def index_to_edge(idx, n, directed=True, order="C"):
         order : 'C' for C-style (i.e. rows filled first) or 'F' for Fortran-style (i.e. columns filled first) indexing.
 
     Returns:
-        edges : a 2-tuple of arrays, each the same size as `idx`.
+        edges : a 2-tuple of arrays, each the same size as `idx_arr`.
     """
-    I, J = np.unravel_index(idx, (n-1,n), 'F')
-    I[I >= J] += 1
     if directed:
-        I, J = np.min(np.vstack((I, J)), axis=0), np.max(np.vstack((I, J)), axis=0)
+        I, J = np.unravel_index(idx, (n-1,n), 'F')
+        I[I >= J] += 1
+        # if not directed: # BUG actually a problem if inputs do not span range(n * (n-1))
+        #     I, J = np.min(np.vstack((I, J)), axis=0), np.max(np.vstack((I, J)), axis=0)
+        # if order == "C":
+        #     return I, J
+        # else:
+        #     return J, I
+    else:
+        J = np.ceil(triangular_root(idx + 1)).astype(int)
+        I = idx - (J - 1) * J // 2
+
     if order == "C":
         return I, J
     else:
         return J, I
+
 
 
 def triangular_root(x):
